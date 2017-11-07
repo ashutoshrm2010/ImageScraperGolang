@@ -10,7 +10,7 @@ import (
 func main()  {
 	var application = &system.Application{}
 	route.PrepareRoutes(application)
-	flag.Set("bind","172.20.10.4:8000")
+	flag.Set("bind","192.168.2.20:8000")
 	goji.Serve()
 
 }

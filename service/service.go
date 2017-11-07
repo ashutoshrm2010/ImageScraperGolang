@@ -12,12 +12,11 @@ import (
 	"gopkg.in/mgo.v2/bson"
 	"image/color"
 	"image"
-	"fmt"
 	"image/jpeg"
-	"image/png"
-
 	"math"
 	"os"
+	"io/ioutil"
+	"image/png"
 )
 //This function is to search image from google and download into in local with jpg extension
 func ImageScrapfromGoogleService(userInput string) ([]byte,error) {
@@ -29,7 +28,7 @@ func ImageScrapfromGoogleService(userInput string) ([]byte,error) {
 	var saveUrl []string
 	doc.Find("img").Each(func(index int, item *goquery.Selection) {
 		linkTag := item
-		link, _ := linkTag.Attr("src")
+		link,_ := linkTag.Attr("src")
 		//linkText := linkTag.Text()
 		//fmt.Printf("Link #%d: '%s' - '%s'\n", index, linkText, link)
 		//allLinks=append(allLinks,link)
@@ -37,7 +36,6 @@ func ImageScrapfromGoogleService(userInput string) ([]byte,error) {
 		saveUrl=append(saveUrl,DownloadImage(link))
 	})
 	SaveUrlsInMongo(userInput,saveUrl)
-	//ChangeImage(saveUrl[0])
 	response := make(map[string]interface{})
 	response["message"]="success"
 	finalResponse, _ := json.Marshal(response)
@@ -51,8 +49,7 @@ func DownloadImage(url string)string{
 	}
 	defer response.Body.Close()
 	var filePath string
-	filePath="/home/ashu/Desktop/ashu/"+uuid.New()+".jpg"
-
+	filePath="/home/ashu/Desktop/ashu/"+uuid.New()
 	file, err := os.Create(filePath)
 	if err != nil {
 		log.Fatal(err)
@@ -61,8 +58,12 @@ func DownloadImage(url string)string{
 	if err != nil {
 		log.Fatal(err)
 	}
+	fileContent,_:=ioutil.ReadFile(filePath)
+	imageType:=http.DetectContentType(fileContent)
+	filteredFilePath:=ChangeImage(filePath,imageType)
+	os.Remove(filePath)
 	file.Close()
-	return filePath
+	return filteredFilePath
 }
 
 //saving all image urls into mongo
@@ -113,11 +114,7 @@ func GetSearchedImageUrlsFromDBService (id string) ([]byte,error) {
 	return finalResponse, nil
 }
 
-//This Part is for filter image in another format needs time for completing
-//don't consider this code as now
-//logics are for saving images with different extension and applying grey scale filter
-
-
+//This Part is for filter image in grey scale format
 type Converted struct {
 	Img image.Image
 	Mod color.Model
@@ -127,13 +124,11 @@ func (c *Converted) At(x, y int) color.Color{
 	return c.Mod.Convert(c.Img.At(x,y))
 }
 //
-func ChangeImage(img1 io.Reader,imageFormat string) string{
-
-	//imageFormat,_:=guessImageFormat(img1)
-	fmt.Println("change",imageFormat)
-	img, _, err := image.Decode(img1)
+func ChangeImage(img1 string,imageFormat string) string{
+	infile,_:=os.Open(img1)
+	img, _, err := image.Decode(infile)
 	if err != nil {
-		log.Fatalln("sdsddsdsd",err)
+		log.Fatalln(err)
 	}
 	bounds := img.Bounds()
 	w, h := bounds.Max.X, bounds.Max.Y
@@ -154,129 +149,37 @@ func ChangeImage(img1 io.Reader,imageFormat string) string{
 	imagePathJPEG:="/home/ashu/Desktop/ashu/test/"+uuid.New()+".jpeg"
 	imagePathPNG:="/home/ashu/Desktop/ashu/test/"+uuid.New()+".png"
 
-
-	fmt.Println("tttttttttt",imageFormat)
-	if imageFormat=="jpeg"{
-		fmt.Println("jpeggggggggggg")
+	if (imageFormat=="image/jpeg")||(imageFormat=="image/jpg"){
 		outfile, err := os.Create(imagePathJPEG)
 		if err != nil {
-			log.Fatalln("aiii",err)
+			log.Fatalln(err)
 		}
 		defer outfile.Close()
 
 		err=jpeg.Encode(outfile,grayScale,nil)
 		if err!=nil{
-			fmt.Println("aaaaaaaaaaa",err)
+			log.Fatalln(err)
 		}
 
 		return imagePathJPEG
 
-	}else if imageFormat=="png"{
-		fmt.Println("pngggggggggggggg",imageFormat)
+	}else if imageFormat=="image/png"{
 		outfile, err := os.Create(imagePathPNG)
 		if err != nil {
-			log.Fatalln("aiii",err)
+			log.Fatalln(err)
 		}
 		defer outfile.Close()
 
 		err=png.Encode(outfile,grayScale)
 		if err!=nil{
-			fmt.Println("aaaaaaaaaaa",err)
+			log.Fatalln(err)
 		}
 
 		return imagePathPNG
 
 	}
 
-	/*img, _, err := image.Decode(img1)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	bounds := img.Bounds()
-	w, h := bounds.Max.X, bounds.Max.Y
-	grayScale := image.NewGray(image.Rectangle{image.Point{0, 0}, image.Point{w, h}})
-	for x := 0; x < w; x++ {
-		for y := 0; y < h; y++ {
-			imageColor := img.At(x, y)
-			rr, gg, bb, _ := imageColor.RGBA()
-			r := math.Pow(float64(rr), 2.2)
-			g := math.Pow(float64(gg), 2.2)
-			b := math.Pow(float64(bb), 2.2)
-			m := math.Pow(0.2125*r+0.7154*g+0.0721*b, 1/2.2)
-			Y := uint16(m + 0.5)
-			grayColor := color.Gray{uint8(Y >> 8)}
-			grayScale.Set(x, y, grayColor)
-		}
-	}*/
-	////  imagepath:="/home/ashu/Desktop/ashu/test/"+uuid.New()+".jpeg"
-	// imagepath1:="/home/ashu/Desktop/ashu/test/"+uuid.New()+".png"
-
-
-	/*if imageFormat=="jpeg"||imageFormat=="jpg"{
-		outfile, err := os.Create(imagepath)
-		if err != nil {
-			log.Fatalln("aiii",err)
-		}
-		defer outfile.Close()
-		err=jpeg.Encode(outfile,grayScale,nil)
-		if err!=nil{
-			fmt.Println("aaaaaaaaaaa",err)
-		}
-
-		return imagepath
-       }else if imageFormat=="png" {
-		outfile, err := os.Create(imagepath1)
-		if err != nil {
-			log.Fatalln("aiii",err)
-		}
-		defer outfile.Close()
-		err=png.Encode(outfile,grayScale)
-		if err!=nil{
-			fmt.Println("aaaaaaaaaaa",err)
-		}
-		return imagepath1
-	}*/
 	return ""
 }
 
-func guessImageFormat(r io.Reader) (format string, err error) {
-	_, format, err = image.DecodeConfig(r)
-	return format,err
-}
-/*
-func init() {
-	image.RegisterFormat("jpeg", "jpeg", jpeg.Decode, jpeg.DecodeConfig)
-	image.RegisterFormat("png", "png", png.Decode, png.DecodeConfig)
-	image.RegisterFormat("gif", "gif", gif.Decode, gif.DecodeConfig)
 
-}
-*/
-
-/*imageFormat,_:=guessImageFormat(response.Body)
-	if imageFormat=="jpeg"{
-		filePath="/home/ashu/Desktop/ashu/"+uuid.New()+".jpeg"
-		file, err := os.Create(filePath)
-		if err != nil {
-			log.Fatal(err)
-		}
-		// Use io.Copy to just dump the response body to the file. This supports huge files
-		_, err = io.Copy(file, response.Body)
-		if err != nil {k
-			log.Fatal(err)
-		}
-		file.Close()
-		return filePath
-	}else if imageFormat=="png"{
-		filePath="/home/ashu/Desktop/ashu/"+uuid.New()+".png"
-		file, err := os.Create(filePath)
-		if err != nil {
-			log.Fatal(err)
-		}
-		// Use io.Copy to just dump the response body to the file. This supports huge files
-		_, err = io.Copy(file, response.Body)
-		if err != nil {
-			log.Fatal(err)
-		}
-		file.Close()
-		return filePath
-	}*/
